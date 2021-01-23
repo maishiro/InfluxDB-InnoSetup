@@ -19,7 +19,7 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
-DefaultDirName=C:\work\InfluxDB
+DefaultDirName=C:\work\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=output
@@ -37,10 +37,10 @@ Source: "module\influx_inspect.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "module\influx_stress.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "module\influx_tsm.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "module\influxd.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "module\influxdb.conf"; DestDir: "{app}"; Flags: ignoreversion
+Source: "module\influxdb.conf"; DestDir: "{app}"; Flags: ignoreversion; AfterInstall: WriteHomePaths('{app}\influxdb.conf')
 Source: "module\nssm.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "module\shell.bat"; DestDir: "{app}"; Flags: ignoreversion
-Source: "module\run.bat"; DestDir: "{app}"; Flags: ignoreversion
+Source: "module\shell.bat"; DestDir: "{app}"; Flags: ignoreversion; AfterInstall: WriteHomePath('{app}\shell.bat')
+Source: "module\run.bat"; DestDir: "{app}"; Flags: ignoreversion; AfterInstall: WriteHomePath('{app}\run.bat')
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]
@@ -48,9 +48,53 @@ Source: "module\run.bat"; DestDir: "{app}"; Flags: ignoreversion
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 
 [Run] 
-Filename: "{app}\nssm.exe"; Parameters: "install influxDB {app}\influxd.exe -config {app}\influxdb.conf"; Flags: runhidden
-Filename: "{app}\nssm.exe"; Parameters: "set influxDB AppDirectory C:\work\InfluxDB"; Flags: runhidden
-Filename: "{app}\nssm.exe"; Parameters: "set influxDB AppEnvironmentExtra HOME=C:/work/InfluxDB"; Flags: runhidden
+Filename: "{app}\nssm.exe"; Parameters: "install {#MyAppName} {app}\influxd.exe -config {app}\influxdb.conf"; Flags: runhidden
+Filename: "{app}\nssm.exe"; Parameters: "set {#MyAppName} AppDirectory {app}"; Flags: runhidden
+Filename: "{app}\nssm.exe"; Parameters: {code:GetNssmParameter}; Flags: runhidden
 
 [UninstallRun]
-Filename: "{app}\nssm.exe"; Parameters: "remove influxDB"; Flags: runhidden
+Filename: "{app}\nssm.exe"; Parameters: "remove {#MyAppName}"; Flags: runhidden
+
+[Code]
+function GetHomePath():AnsiString;
+var
+  str: String;
+begin
+  str := ExpandConstant('{app}');
+  StringChangeEx( str, '\', '/', True );
+  Result := str;
+  //Log(Result);
+end;
+
+function GetNssmParameter(S: String):String;
+begin
+  Result := ExpandConstant('set {#MyAppName} AppEnvironmentExtra HOME=') + GetHomePath();
+  Log(Result);
+end;
+
+procedure WriteHomePath(S: String);
+var
+  FileData: AnsiString;
+  UnicodeStr: string;
+begin
+  LoadStringFromFile( ExpandConstant(S), FileData );
+  UnicodeStr := String(FileData);
+  Log(UnicodeStr);
+  StringChangeEx( UnicodeStr, '####_HOME_PATH_####', GetHomePath(), True );
+  Log(UnicodeStr);
+  SaveStringToFile( ExpandConstant(S), UnicodeStr, False );
+end;
+
+procedure WriteHomePaths(S: String);
+var
+  FileData: TArrayOfString;
+  UnicodeStr: string;
+  i: Integer;
+begin
+  LoadStringsFromFile( ExpandConstant(S), FileData );
+  for i := 0 to GetArrayLength(FileData)-1 do begin
+    StringChangeEx( FileData[i], '####_HOME_PATH_####', GetHomePath(), True );
+    Log( FileData[i] );
+  end;
+  SaveStringsToFile( ExpandConstant(S), FileData, False );
+end;
